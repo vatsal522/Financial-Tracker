@@ -206,10 +206,105 @@ def get_networth_data():
 
 total_balance, total_expenses, net_worth = get_networth_data()
 
-# Display Net Worth Overview
-st.metric("Total Balance", f"${total_balance:,.2f}")
-st.metric("Total Expenses", f"${total_expenses:,.2f}")
-st.metric("Net Worth", f"${net_worth:,.2f}")
+# # Display Net Worth Overview
+# st.metric("Total Balance", f"${total_balance:,.2f}")
+# st.metric("Total Expenses", f"${total_expenses:,.2f}")
+# st.metric("Net Worth", f"${net_worth:,.2f}")
+
+            
+def generate_ai_recommendation():
+    # Prepare the prompt
+    prompt = ChatPromptTemplate.from_template("""
+        Financial Summary:
+        - Total Balance: ${total_balance:,.2f}
+        - Total Expenses: ${total_expenses:,.2f}
+        - Net Worth: ${net_worth:,.2f}
+
+        Income vs. Expenses:
+        - Income: ${monthly_income:,.2f}
+        - Expenses: ${monthly_expenses:,.2f}
+
+        Provide a short financial recommendation based on the above data.
+    """)
+
+    # Fetch net worth data
+    total_balance, total_expenses, net_worth = get_networth_data()
+
+    # Fetch monthly income and expenses
+    try:
+        # Fetch income from the API
+        income_response = requests.get("http://127.0.0.1:5000/income_expenses/current_month_income")
+        if income_response.status_code == 200:
+            monthly_income = income_response.json().get("current_month_income", 0.0)
+        else:
+            st.error("Failed to fetch current month's income.")
+            monthly_income = 0.0
+
+        # Fetch expenses from the API
+        expenses_response = requests.get("http://127.0.0.1:5000/income_expenses/current_month_expenses")
+        if expenses_response.status_code == 200:
+            monthly_expenses = expenses_response.json().get("current_month_expenses", 0.0)
+        else:
+            st.error("Failed to fetch current month's expenses.")
+            monthly_expenses = 0.0
+
+        # Generate recommendation via LangChain
+        try:
+            # Initialize LangChain components
+            llm = ChatOpenAI(model="gpt-4", openai_api_key=os.getenv("OPENAI_API_KEY"))  # Use your API key from .env
+            output_parser = StrOutputParser()
+
+            # Create a chain by piping prompt -> llm -> output_parser
+            chain = prompt | llm | output_parser
+
+            # Invoke the chain with input data
+            recommendation = chain.invoke({
+                "total_balance": total_balance,
+                "total_expenses": total_expenses,
+                "net_worth": net_worth,
+                "monthly_income": monthly_income,
+                "monthly_expenses": monthly_expenses,
+            })
+
+            # Return the stripped recommendation
+            return recommendation.strip()
+
+        except Exception as e:
+            st.error(f"Error generating AI recommendation: {e}")
+            return ""
+
+    except Exception as e:
+        st.error(f"Error fetching income/expense data: {e}")
+        return ""
+
+
+
+## Net Worth Overview Section
+# st.header("Net Worth Overview")
+
+# Fetch net worth data
+total_balance, total_expenses, net_worth = get_networth_data()
+
+# Layout with two columns: one for Net Worth metrics and one for the AI Recommendation button
+col1, col2 = st.columns([3, 1])
+
+with col1:
+    # Display Net Worth metrics
+    st.metric("Total Balance", f"${total_balance:,.2f}")
+    st.metric("Total Expenses", f"${total_expenses:,.2f}")
+    st.metric("Net Worth", f"${net_worth:,.2f}")
+
+with col2:
+    # Add the AI Recommendation button
+    if st.button("AI Recommendation"):
+        # Generate AI recommendation
+        st.write("Generating recommendation...")
+        recommendation = generate_ai_recommendation()
+        if recommendation:
+            st.success("Recommendation Generated!")
+            st.write(recommendation)
+            
+
 
 # Pie chart for Net Worth
 pie_data = pd.DataFrame({

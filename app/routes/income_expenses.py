@@ -73,3 +73,83 @@ def add_expense():
         "index": response["_index"],
         "result": response["result"]
     }), 201
+    
+    
+    
+    
+@income_expenses_bp.route("/current_month_income", methods=["GET"])
+def get_current_month_income():
+    try:
+        # Get the first and last days of the current month
+        now = datetime.now()
+        first_day = now.replace(day=1).isoformat()
+        last_day = now.isoformat()
+
+        # Elasticsearch query to sum income for the current month
+        response = es.search(index="income_expenses", body={
+            "query": {
+                "bool": {
+                    "must": [
+                        {"term": {"type": "income"}},
+                        {"range": {"date": {"gte": first_day, "lte": last_day}}}
+                    ]
+                }
+            },
+            "aggs": {
+                "total_income": {"sum": {"field": "amount"}}
+            },
+            "size": 0
+        })
+
+        # Extract the total income
+        total_income = response["aggregations"]["total_income"]["value"]
+
+        # Return the total income for the current month
+        return jsonify({
+            "message": "Successfully fetched current month's total income.",
+            "current_month_income": total_income
+        }), 200
+
+    except Exception as e:
+        # Log and return the error
+        print(f"Error fetching current month's total income: {e}")
+        return jsonify({"error": str(e)}), 500
+    
+    
+@income_expenses_bp.route("/current_month_expenses", methods=["GET"])
+def get_current_month_expenses():
+    try:
+        # Get the first and last days of the current month
+        now = datetime.now()
+        first_day = now.replace(day=1).isoformat()
+        last_day = now.isoformat()
+
+        # Elasticsearch query to sum expenses for the current month
+        response = es.search(index="income_expenses", body={
+            "query": {
+                "bool": {
+                    "must": [
+                        {"term": {"type": "expense"}},
+                        {"range": {"date": {"gte": first_day, "lte": last_day}}}
+                    ]
+                }
+            },
+            "aggs": {
+                "total_expenses": {"sum": {"field": "amount"}}
+            },
+            "size": 0
+        })
+
+        # Extract the total expenses
+        total_expenses = response["aggregations"]["total_expenses"]["value"]
+
+        # Return the total expenses for the current month
+        return jsonify({
+            "message": "Successfully fetched current month's total expenses.",
+            "current_month_expenses": total_expenses
+        }), 200
+
+    except Exception as e:
+        # Log and return the error
+        print(f"Error fetching current month's total expenses: {e}")
+        return jsonify({"error": str(e)}), 500
