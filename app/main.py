@@ -56,7 +56,7 @@ def ensure_indices():
             print("************************************************************************************************")
             print("'total_balance' document already exists.")
             print("************************************************************************************************")
-        except Exception as e:
+        except Exception:
             print("************************************************************************************************")
             print("Creating 'total_balance' document...")
             print("************************************************************************************************")
@@ -70,27 +70,56 @@ def ensure_indices():
 
         # Check and create the 'income_expenses' index if missing
         if not es.indices.exists(index="income_expenses"):
+            print("************************************************************************************************")
+            print("Index 'income_expenses' does not exist. Creating with correct mapping...")
+            print("************************************************************************************************")
             es.indices.create(index="income_expenses", body={
                 "mappings": {
                     "properties": {
                         "type": {"type": "keyword"},
                         "amount": {"type": "double"},
-                        "category": {"type": "text"},
+                        "category": {
+                            "type": "text",
+                            "fields": {
+                                "keyword": {"type": "keyword"}
+                            }
+                        },
                         "date": {"type": "date"}
                     }
                 }
             })
             print("************************************************************************************************")
-            print("Created 'income_expenses' index.")
+            print("Created 'income_expenses' index with correct mapping.")
             print("************************************************************************************************")
         else:
             print("************************************************************************************************")
             print("Index 'income_expenses' already exists.")
             print("************************************************************************************************")
 
+        # Check if 'category.keyword' exists
+        mapping = es.indices.get_mapping(index="income_expenses")
+        if "keyword" not in mapping["income_expenses"]["mappings"]["properties"]["category"].get("fields", {}):
+            print("************************************************************************************************")
+            print("Updating 'income_expenses' index to include 'category.keyword'...")
+            print("************************************************************************************************")
+            es.indices.put_mapping(index="income_expenses", body={
+                "properties": {
+                    "category": {
+                        "type": "text",
+                        "fields": {
+                            "keyword": {"type": "keyword"}
+                        }
+                    }
+                }
+            })
+            print("************************************************************************************************")
+            print("Updated 'income_expenses' index mapping to include 'category.keyword'.")
+            print("************************************************************************************************")
+
     except Exception as e:
+        print("************************************************************************************************")
         print(f"Error ensuring indices: {e}")
-        
+        print("************************************************************************************************")   
         
 if __name__ == "__main__":
     ensure_indices()

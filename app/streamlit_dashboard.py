@@ -185,21 +185,20 @@ st.header("Net Worth Overview")
 # Fetch balance and expenses data from Elasticsearch
 def get_networth_data():
     try:
-        # Fetch total balance
-        balance_response = es.get(index="bank_accounts", id="total_balance")
-        total_balance = balance_response["_source"]["balance"]
+        # Call the backend API to fetch net worth data
+        api_url = "http://127.0.0.1:5000/net_worth/get_total_networth"
+        response = requests.get(api_url)
 
-        # Fetch total expenses
-        expenses_response = es.search(index="income_expenses", body={
-            "query": {"match": {"type": "expense"}},
-            "aggs": {"total_expenses": {"sum": {"field": "amount"}}},
-            "size": 0
-        })
-        total_expenses = expenses_response["aggregations"]["total_expenses"]["value"]
-
-        # Calculate net worth
-        net_worth = total_balance - total_expenses
-        return total_balance, total_expenses, net_worth
+        if response.status_code == 200:
+            # Parse the API response
+            data = response.json()
+            total_balance = data.get("total_balance", 0)
+            total_expenses = data.get("total_expenses", 0)
+            net_worth = data.get("networth", 0)
+            return total_balance, total_expenses, net_worth
+        else:
+            st.error(f"Failed to fetch net worth. Status code: {response.status_code}")
+            return 0, 0, 0
 
     except Exception as e:
         st.error(f"Error fetching net worth data: {e}")
@@ -317,7 +316,51 @@ if st.session_state["show_table"] and not st.session_state["dataframe"].empty:
     st.write("### Transaction List: ")
     st.dataframe(st.session_state["dataframe"])
     
-    
+
+
+
+# Section: Expenses by Category
+st.header("Expenses by Category")
+
+def fetch_expenses_by_category():
+    try:
+        response = es.search(index="income_expenses", body={
+            "query": {
+                "term": {"type": "expense"}
+            },
+            "aggs": {
+                "expenses_by_category": {
+                    "terms": {"field": "category.keyword", "size": 10},  # Aggregate by category
+                    "aggs": {
+                        "total_expenses": {"sum": {"field": "amount"}}
+                    }
+                }
+            },
+            "size": 0
+        })
+
+        # Extract the aggregation results
+        buckets = response["aggregations"]["expenses_by_category"]["buckets"]
+        categories = [bucket["key"] for bucket in buckets]
+        expenses = [bucket["total_expenses"]["value"] for bucket in buckets]
+
+        # Return as a DataFrame
+        return pd.DataFrame({"Category": categories, "Total Expenses": expenses})
+
+    except Exception as e:
+        st.error(f"Error fetching expense data by category: {e}")
+        return pd.DataFrame()
+
+# Fetch the data
+expense_df = fetch_expenses_by_category()
+
+# Display the bar chart if data is available
+if not expense_df.empty:
+    st.write("### Total Expenses by Category")
+    fig = px.bar(expense_df, x="Category", y="Total Expenses", title="Expenses by Category", text="Total Expenses")
+    st.plotly_chart(fig)
+else:
+    st.info("No expense data available to display.")
 
 
 # Section: Income by Category
@@ -325,20 +368,19 @@ st.header("Income by Category")
 
 def fetch_income_by_category():
     try:
-        # Elasticsearch query to aggregate income by category
         response = es.search(index="income_expenses", body={
             "query": {
                 "term": {"type": "income"}
             },
             "aggs": {
                 "income_by_category": {
-                    "terms": {"field": "category.keyword", "size": 10},  # Aggregate by category
+                    "terms": {"field": "category.keyword", "size": 10},
                     "aggs": {
                         "total_income": {"sum": {"field": "amount"}}
                     }
                 }
             },
-            "size": 0  # No need to return individual documents
+            "size": 0
         })
 
         # Extract the aggregation results
@@ -352,7 +394,6 @@ def fetch_income_by_category():
     except Exception as e:
         st.error(f"Error fetching income data by category: {e}")
         return pd.DataFrame()
-
 # Fetch the data
 income_df = fetch_income_by_category()
 
@@ -365,5 +406,6 @@ else:
     st.info("No income data available to display.")
     
     
+
 
 
